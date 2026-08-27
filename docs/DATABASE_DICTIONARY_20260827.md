@@ -2,6 +2,13 @@
 
 > 本文只记录数据库结构和字段含义。结构来源：`prisma/schema.prisma`。当前数据库：PostgreSQL；ORM：Prisma 7。
 
+## 2026-08-28 接入状态更新
+
+- `Conversation` 已由 Chat 页面真实读取和写入，可保存模式、标题、状态、摘要和起止时间。
+- `ConversationMessage` 已由 Chat 页面真实读取和写入，可保存角色、正文、模式、模型标识、Prompt 版本和消息顺序。
+- 当前助手正文仍由 mock 规则生成，不代表已经接入真实 AI。
+- 会话摘要与长期记忆严格分开：结束会话不会自动向 `Memory` 写入数据。
+
 ## 1. 阅读说明
 
 - `String @db.Uuid`：PostgreSQL UUID。

@@ -2,6 +2,15 @@
 
 > 本文记录截至 2026-08-27 已完成的产品、前端与数据库工作，帮助后续开发快速理解“现在有什么、为什么这样设计、下一步从哪里继续”。所有实现仍以项目根目录的 `PRODUCT_ARCHITECTURE.md` 为总规范。
 
+## 2026-08-28 增量：Companion Chat 数据闭环
+
+- Chat 已从静态 mock 页面升级为 PostgreSQL 会话与消息读写。
+- 支持新建会话、四种陪伴模式、历史切换、刷新恢复和结束归档。
+- 结束会话会写入规则生成的 `Conversation.summary`，但不会直接创建长期记忆。
+- 助手回复暂时仍为 mock；数据库会保存 `model = mock` 和 `promptVersion = mock-chat-v1`。
+- 下一步是“记忆候选提取 + 用户确认/纠正/拒绝”，不是直接接入完整长期记忆或 RAG。
+- 详细测试见 `docs/CHAT_DATABASE_TEST_20260828.md`。
+
 ## 1. 当前阶段结论
 
 项目已经从纯 Clickable MVP Shell 进入“逐页接入真实数据库”的阶段，但还没有接入真实 AI、登录鉴权、RAG 或长期记忆自动提取。

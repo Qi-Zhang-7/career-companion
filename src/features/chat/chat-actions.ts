@@ -1,0 +1,37 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import type { ChatActionResult, ChatMode } from "@/features/chat/chat-types";
+import { finishCurrentUserConversation, sendCurrentUserChatMessage } from "@/server/repositories/chat-repository";
+
+const allowedModes = new Set<ChatMode>(["LISTENING", "COACHING", "ADVICE", "ROLEPLAY"]);
+
+export async function sendChatMessage(formData: FormData): Promise<ChatActionResult> {
+  const content = String(formData.get("content") ?? "").trim();
+  const conversationId = String(formData.get("conversationId") ?? "").trim() || null;
+  const modeValue = String(formData.get("mode") ?? "LISTENING") as ChatMode;
+  if (!content) return { status: "error", message: "先写一点你想说的内容。" };
+  if (content.length > 4000) return { status: "error", message: "单条消息请控制在 4000 个字以内。" };
+  const mode = allowedModes.has(modeValue) ? modeValue : "LISTENING";
+  try {
+    const result = await sendCurrentUserChatMessage({ conversationId, mode, content });
+    revalidatePath("/chat");
+    return { status: "success", message: "", ...result };
+  } catch (error) {
+    console.error("Failed to send chat message", error);
+    return { status: "error", message: "消息暂时没有保存成功，请稍后再试。" };
+  }
+}
+
+export async function finishConversation(formData: FormData): Promise<ChatActionResult> {
+  const conversationId = String(formData.get("conversationId") ?? "").trim();
+  if (!conversationId) return { status: "error", message: "当前还没有可以结束的对话。" };
+  try {
+    const summary = await finishCurrentUserConversation(conversationId);
+    revalidatePath("/chat");
+    return { status: "success", message: "对话已结束并生成概要。", conversationId, summary };
+  } catch (error) {
+    console.error("Failed to finish conversation", error);
+    return { status: "error", message: "暂时没有结束成功，请稍后再试。" };
+  }
+}
