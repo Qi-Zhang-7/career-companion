@@ -7,7 +7,7 @@ import { ArrowUp, Bookmark, CheckCircle2, ChevronRight, MessagesSquare, PanelLef
 import { ConversationBubble } from "@/components/conversation-bubble";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { deleteConversation, finishConversation, sendChatMessage } from "@/features/chat/chat-actions";
+import { clearConversationHistory, deleteConversation, finishConversation, sendChatMessage } from "@/features/chat/chat-actions";
 import type { ChatMode, ChatPageData, ConversationView } from "@/features/chat/chat-types";
 import { cn } from "@/lib/utils";
 
@@ -120,13 +120,31 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
     });
   };
 
+  const clearHistory = () => {
+    if (pending || conversations.length === 0) return;
+    const confirmation = window.prompt(`这会从历史中移除当前账号的 ${conversations.length} 段会话。\n\n请输入“清空”继续：`);
+    if (confirmation !== "清空") return;
+    startTransition(async () => {
+      const result = await clearConversationHistory();
+      if (result.status === "error") {
+        setNotice(result.message);
+        return;
+      }
+      setConversations([]);
+      setSelectedId(null);
+      setText("");
+      setNotice(result.message);
+      router.refresh();
+    });
+  };
+
   const messages = selected?.messages ?? [{ id: "draft-greeting", role: "ASSISTANT" as const, content: `我在，${data.userName}。今天想从哪件事开始？你不用先把它想清楚。`, mode, sequenceNo: 1, createdAt: "刚刚" }];
   const hasUserMessage = messages.some((message) => message.role === "USER");
 
   return <div className="page-content fade-in"><div className={cn("grid h-[calc(100dvh-104px)] min-h-[620px] gap-5 transition-[grid-template-columns] duration-200 max-[820px]:grid-cols-1", historyCollapsed ? "grid-cols-[52px_1fr]" : "grid-cols-[260px_1fr]")}>
     <aside className={cn("min-w-0 overflow-y-auto pr-1 max-[820px]:hidden", historyCollapsed && "overflow-hidden")}>
       <div className={cn("mb-3 flex items-center", historyCollapsed ? "justify-center" : "justify-between")}>
-        {!historyCollapsed && <div className="eyebrow">陪伴记录</div>}
+        {!historyCollapsed && <div className="flex items-center gap-2"><div className="eyebrow">陪伴记录</div><button type="button" onClick={clearHistory} disabled={pending || conversations.length === 0} className="cursor-pointer border-0 bg-transparent p-0 text-[11px] text-[#9a7568] hover:text-[#a55640] disabled:cursor-not-allowed disabled:opacity-40">清空</button></div>}
         <button type="button" onClick={() => setHistoryCollapsed((value) => !value)} aria-label={historyCollapsed ? "展开会话历史" : "折叠会话历史"} title={historyCollapsed ? "展开会话历史" : "折叠会话历史"} className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-white/75 text-[#718078] shadow-sm hover:bg-white">
           {historyCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>}
         </button>

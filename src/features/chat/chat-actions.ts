@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { ChatActionResult, ChatMode } from "@/features/chat/chat-types";
-import { deleteCurrentUserConversation, finishCurrentUserConversation, sendCurrentUserChatMessage } from "@/server/repositories/chat-repository";
+import { clearCurrentUserConversationHistory, deleteCurrentUserConversation, finishCurrentUserConversation, sendCurrentUserChatMessage } from "@/server/repositories/chat-repository";
 
 const allowedModes = new Set<ChatMode>(["LISTENING", "COACHING", "ADVICE", "ROLEPLAY"]);
 
@@ -46,5 +46,16 @@ export async function deleteConversation(formData: FormData): Promise<ChatAction
   } catch (error) {
     console.error("Failed to delete conversation", error);
     return { status: "error", message: "会话暂时没有删除成功，请稍后再试。" };
+  }
+}
+
+export async function clearConversationHistory(): Promise<ChatActionResult> {
+  try {
+    const deletedCount = await clearCurrentUserConversationHistory();
+    revalidatePath("/chat");
+    return { status: "success", message: deletedCount > 0 ? `已清空 ${deletedCount} 段会话。` : "当前没有需要清空的会话。", deletedCount };
+  } catch (error) {
+    console.error("Failed to clear conversation history", error);
+    return { status: "error", message: "会话历史暂时没有清空成功，请稍后再试。" };
   }
 }

@@ -97,3 +97,15 @@ export async function deleteCurrentUserConversation(conversationId: string) {
   if (!conversation) throw new Error("CONVERSATION_NOT_FOUND");
   await prisma.conversation.update({ where: { id: conversation.id }, data: { deletedAt: new Date(), status: EntityStatus.DELETED } });
 }
+
+export async function softDeleteAllUserConversations(userId: string) {
+  const result = await prisma.conversation.updateMany({
+    where: { userId, deletedAt: null },
+    data: { deletedAt: new Date(), status: EntityStatus.DELETED },
+  });
+  return result.count;
+}
+
+export async function clearCurrentUserConversationHistory() {
+  return softDeleteAllUserConversations(await getCurrentUserId());
+}

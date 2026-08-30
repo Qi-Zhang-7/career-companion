@@ -33,4 +33,5 @@ export type ChatActionResult = {
   userMessage?: ChatMessageView;
   assistantMessage?: ChatMessageView;
   summary?: string;
+  deletedCount?: number;
 };
