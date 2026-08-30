@@ -32,6 +32,7 @@ export async function getCurrentChatPageData(): Promise<ChatPageData | null> {
     select: {
       displayName: true,
       conversations: {
+        where: { deletedAt: null },
         orderBy: { startedAt: "desc" },
         take: 20,
         include: { messages: { orderBy: { sequenceNo: "asc" } } },
@@ -58,7 +59,7 @@ export async function sendCurrentUserChatMessage(input: { conversationId: string
   const userId = await getCurrentUserId();
   return prisma.$transaction(async (tx) => {
     let conversationId = input.conversationId;
-    let conversation = conversationId ? await tx.conversation.findFirst({ where: { id: conversationId, userId }, include: { messages: { orderBy: { sequenceNo: "desc" }, take: 1 } } }) : null;
+    let conversation = conversationId ? await tx.conversation.findFirst({ where: { id: conversationId, userId, deletedAt: null }, include: { messages: { orderBy: { sequenceNo: "desc" }, take: 1 } } }) : null;
     if (conversationId && !conversation) throw new Error("CONVERSATION_NOT_FOUND");
     if (!conversation) {
       conversation = await tx.conversation.create({
@@ -80,7 +81,7 @@ export async function sendCurrentUserChatMessage(input: { conversationId: string
 
 export async function finishCurrentUserConversation(conversationId: string) {
   const userId = await getCurrentUserId();
-  const conversation = await prisma.conversation.findFirst({ where: { id: conversationId, userId }, include: { messages: { where: { role: MessageRole.USER }, orderBy: { sequenceNo: "asc" } } } });
+  const conversation = await prisma.conversation.findFirst({ where: { id: conversationId, userId, deletedAt: null }, include: { messages: { where: { role: MessageRole.USER }, orderBy: { sequenceNo: "asc" } } } });
   if (!conversation) throw new Error("CONVERSATION_NOT_FOUND");
   const userPoints = conversation.messages.slice(0, 3).map((message) => message.content.trim()).filter(Boolean);
   const summary = userPoints.length > 0
@@ -88,4 +89,11 @@ export async function finishCurrentUserConversation(conversationId: string) {
     : "本次对话尚未记录具体内容。";
   await prisma.conversation.update({ where: { id: conversation.id }, data: { summary, endedAt: new Date(), status: EntityStatus.ARCHIVED } });
   return summary;
+}
+
+export async function deleteCurrentUserConversation(conversationId: string) {
+  const userId = await getCurrentUserId();
+  const conversation = await prisma.conversation.findFirst({ where: { id: conversationId, userId, deletedAt: null }, select: { id: true } });
+  if (!conversation) throw new Error("CONVERSATION_NOT_FOUND");
+  await prisma.conversation.update({ where: { id: conversation.id }, data: { deletedAt: new Date(), status: EntityStatus.DELETED } });
 }

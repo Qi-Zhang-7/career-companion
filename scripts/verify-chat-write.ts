@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { prisma } from "../src/server/db/prisma";
-import { finishCurrentUserConversation, sendCurrentUserChatMessage } from "../src/server/repositories/chat-repository";
+import { deleteCurrentUserConversation, finishCurrentUserConversation, getCurrentChatPageData, sendCurrentUserChatMessage } from "../src/server/repositories/chat-repository";
 
 const marker = `CHAT_WRITE_CHECK_${Date.now()}`;
 let conversationId: string | null = null;
@@ -17,7 +17,13 @@ async function main() {
   if (!finished || finished.status !== "ARCHIVED" || !finished.endedAt || finished.summary !== summary) {
     throw new Error("Chat finish verification failed");
   }
-  console.log({ writeVerified: true, messageCount: created.messages.length, archived: true });
+  await deleteCurrentUserConversation(conversationId);
+  const deleted = await prisma.conversation.findUnique({ where: { id: conversationId } });
+  const pageData = await getCurrentChatPageData();
+  if (!deleted?.deletedAt || deleted.status !== "DELETED" || pageData?.conversations.some((conversation) => conversation.id === conversationId)) {
+    throw new Error("Chat soft-delete verification failed");
+  }
+  console.log({ writeVerified: true, messageCount: created.messages.length, archived: true, softDeleteVerified: true });
 }
 
 main()

@@ -7,6 +7,7 @@
 - 四种陪伴方式会记录到消息的 `mode` 字段。
 - 结束对话后保存结束时间、归档状态和规则生成的摘要。
 - 刷新页面后，会话、消息和摘要仍然存在。
+- 左侧会话记录支持单次删除；确认后写入 `Conversation.deletedAt` 和 `status = DELETED`，并立即从页面隐藏。
 
 本轮 AI 回复仍是 mock，并记录 `model = mock`、`promptVersion = mock-chat-v1`，便于下一阶段替换。
 
@@ -21,10 +22,12 @@
 3. 刷新浏览器，确认历史和消息仍在。
 4. 点击“结束并生成摘要”，确认出现摘要且不能继续发送。
 5. 切换历史会话，确认内容保持一致。
+6. 点击某条会话右侧的删除图标，取消时不应变化；再次操作并确认后，该会话应从历史中消失。
 
 ## DBeaver 检查
 
 - `Conversation`：检查 `mode`、`title`、`status`、`summary`、`startedAt`、`endedAt`。
+- 删除会话后检查 `Conversation.deletedAt` 已写入，`status` 为 `DELETED`；本阶段尚未物理删除消息。
 - `ConversationMessage`：检查 `role`、`content`、`mode`、`model`、`promptVersion`、`sequenceNo`。
 - `Memory`：本轮聊天不应自动增加记录。
 

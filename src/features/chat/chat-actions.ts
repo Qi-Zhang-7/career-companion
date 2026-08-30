@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { ChatActionResult, ChatMode } from "@/features/chat/chat-types";
-import { finishCurrentUserConversation, sendCurrentUserChatMessage } from "@/server/repositories/chat-repository";
+import { deleteCurrentUserConversation, finishCurrentUserConversation, sendCurrentUserChatMessage } from "@/server/repositories/chat-repository";
 
 const allowedModes = new Set<ChatMode>(["LISTENING", "COACHING", "ADVICE", "ROLEPLAY"]);
 
@@ -33,5 +33,18 @@ export async function finishConversation(formData: FormData): Promise<ChatAction
   } catch (error) {
     console.error("Failed to finish conversation", error);
     return { status: "error", message: "暂时没有结束成功，请稍后再试。" };
+  }
+}
+
+export async function deleteConversation(formData: FormData): Promise<ChatActionResult> {
+  const conversationId = String(formData.get("conversationId") ?? "").trim();
+  if (!conversationId) return { status: "error", message: "没有找到需要删除的会话。" };
+  try {
+    await deleteCurrentUserConversation(conversationId);
+    revalidatePath("/chat");
+    return { status: "success", message: "会话已删除。", conversationId };
+  } catch (error) {
+    console.error("Failed to delete conversation", error);
+    return { status: "error", message: "会话暂时没有删除成功，请稍后再试。" };
   }
 }

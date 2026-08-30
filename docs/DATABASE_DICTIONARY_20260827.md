@@ -9,6 +9,12 @@
 - 当前助手正文仍由 mock 规则生成，不代表已经接入真实 AI。
 - 会话摘要与长期记忆严格分开：结束会话不会自动向 `Memory` 写入数据。
 
+## 2026-08-30 Conversation 删除字段
+
+- `Conversation.deletedAt`：可空时间戳；为空表示正常会话，有值表示用户已删除并从产品界面隐藏。
+- 删除时同时将 `Conversation.status` 改为 `DELETED`。
+- 当前采用软删除，关联 `ConversationMessage` 暂时保留；后续由保留期限和后台清理任务执行物理删除。
+
 ## 1. 阅读说明
 
 - `String @db.Uuid`：PostgreSQL UUID。

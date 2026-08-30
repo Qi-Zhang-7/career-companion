@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, useEffect, useState, useTransition } from "react";
-import { ArrowUp, Bookmark, CheckCircle2, ChevronRight, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Sparkles } from "lucide-react";
+import { ArrowUp, Bookmark, CheckCircle2, ChevronRight, MessagesSquare, PanelLeftClose, PanelLeftOpen, Paperclip, Sparkles, Trash2 } from "lucide-react";
 import { ConversationBubble } from "@/components/conversation-bubble";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { finishConversation, sendChatMessage } from "@/features/chat/chat-actions";
+import { deleteConversation, finishConversation, sendChatMessage } from "@/features/chat/chat-actions";
 import type { ChatMode, ChatPageData, ConversationView } from "@/features/chat/chat-types";
 import { cn } from "@/lib/utils";
 
@@ -102,6 +102,24 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
     });
   };
 
+  const removeConversation = (conversationId: string, title: string | null) => {
+    if (pending || !window.confirm(`确认删除“${title ?? "未命名对话"}”吗？\n\n删除后它会从会话历史中移除。`)) return;
+    const formData = new FormData();
+    formData.set("conversationId", conversationId);
+    startTransition(async () => {
+      const result = await deleteConversation(formData);
+      if (result.status === "error") {
+        setNotice(result.message);
+        return;
+      }
+      const remaining = conversations.filter((conversation) => conversation.id !== conversationId);
+      setConversations(remaining);
+      if (selectedId === conversationId) setSelectedId(remaining[0]?.id ?? null);
+      setNotice(result.message);
+      router.refresh();
+    });
+  };
+
   const messages = selected?.messages ?? [{ id: "draft-greeting", role: "ASSISTANT" as const, content: `我在，${data.userName}。今天想从哪件事开始？你不用先把它想清楚。`, mode, sequenceNo: 1, createdAt: "刚刚" }];
   const hasUserMessage = messages.some((message) => message.role === "USER");
 
@@ -113,7 +131,7 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
           {historyCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>}
         </button>
       </div>
-      {!historyCollapsed && <><Button className="mb-5 w-full" variant="secondary" onClick={startNew}><MessagesSquare size={16}/>开始新对话</Button>{conversations.length > 0 ? conversations.map((conversation) => <button key={conversation.id} onClick={() => selectConversation(conversation.id)} className={cn("mb-1 w-full cursor-pointer rounded-xl border-0 px-3 py-3 text-left text-sm", selectedId === conversation.id ? "bg-white text-[#385348] shadow-sm" : "bg-transparent text-[#758179] hover:bg-white/55")}><span className="block truncate">{conversation.title ?? "未命名对话"}</span><small className="mt-1 flex justify-between text-[#9aa39e]"><span>{conversation.startedAt}</span><span>{conversation.status === "ARCHIVED" ? "已结束" : "进行中"}</span></small></button>) : <p className="text-xs leading-5 text-[#89938d]">还没有历史对话。第一条消息发送后会自动创建。</p>}</>}
+      {!historyCollapsed && <><Button className="mb-5 w-full" variant="secondary" onClick={startNew}><MessagesSquare size={16}/>开始新对话</Button>{conversations.length > 0 ? conversations.map((conversation) => <div key={conversation.id} className={cn("group mb-1 flex items-center rounded-xl", selectedId === conversation.id ? "bg-white text-[#385348] shadow-sm" : "text-[#758179] hover:bg-white/55")}><button onClick={() => selectConversation(conversation.id)} className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent px-3 py-3 text-left text-sm"><span className="block truncate">{conversation.title ?? "未命名对话"}</span><small className="mt-1 flex justify-between text-[#9aa39e]"><span>{conversation.startedAt}</span><span>{conversation.status === "ARCHIVED" ? "已结束" : "进行中"}</span></small></button><button type="button" onClick={() => removeConversation(conversation.id, conversation.title)} disabled={pending} aria-label={`删除会话：${conversation.title ?? "未命名对话"}`} title="删除会话" className="mr-2 grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-[#a09d96] opacity-0 transition hover:bg-[#f7e7e2] hover:text-[#a65f4a] focus:opacity-100 disabled:cursor-not-allowed group-hover:opacity-100"><Trash2 size={15}/></button></div>) : <p className="text-xs leading-5 text-[#89938d]">还没有历史对话。第一条消息发送后会自动创建。</p>}</>}
     </aside>
 
     <Card className="flex min-h-0 flex-col overflow-hidden"><header className="shrink-0 border-b border-[#e7e3da] px-6 py-5"><div className="flex items-center justify-between gap-4"><div><h1 className="m-0 font-serif text-xl font-medium">{selected?.title ?? "新的陪伴对话"}</h1><p className="mb-0 mt-1 text-xs text-[#89938d]">私人空间 · 消息实时保存 · AI 回复暂为 Mock</p></div><Button variant="ghost" size="sm" onClick={finish} disabled={!selectedId || selected?.status === "ARCHIVED" || pending}><CheckCircle2 size={15}/>{selected?.status === "ARCHIVED" ? "已结束" : "结束并总结"}</Button></div><div className="mt-5 flex flex-wrap gap-2">{modes.map((item) => <button key={item.id} onClick={() => selectMode(item.id)} className={cn("cursor-pointer rounded-full border px-4 py-2 text-xs font-semibold transition", mode === item.id ? "border-[#466a5b] bg-[#466a5b] text-white" : "border-[#dedbd3] bg-white text-[#6f7c75] hover:border-[#9fb0a7]")}>{item.label}</button>)}</div></header>
