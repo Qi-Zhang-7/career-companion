@@ -33,7 +33,7 @@ export type MemoryView = {
 };
 
 export type SettingsPageData = {
-  user: { displayName: string; memoryEnabled: boolean };
+  user: { displayName: string; memoryEnabled: boolean; chatHistoryEnabled: boolean };
   memories: MemoryView[];
 };
 

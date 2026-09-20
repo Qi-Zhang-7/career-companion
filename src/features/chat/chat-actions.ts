@@ -14,10 +14,11 @@ export async function sendChatMessage(formData: FormData): Promise<ChatActionRes
   if (content.length > 4000) return { status: "error", message: "单条消息请控制在 4000 个字以内。" };
   const mode = allowedModes.has(modeValue) ? modeValue : "LISTENING";
   try {
-    const result = await sendCurrentUserChatMessage({ conversationId, mode, content });
+    const result = await sendCurrentUserChatMessage({ conversationId, mode, content, saveHistory: formData.get("saveHistory") !== "false" });
     revalidatePath("/chat");
     return { status: "success", message: "", ...result };
   } catch (error) {
+    if (error instanceof Error && error.message === "HISTORY_DISABLED_START_NEW") return { status: "error", message: "历史保存已关闭，请开始新对话；旧会话不会再追加消息。" };
     console.error("Failed to send chat message", error);
     return { status: "error", message: "消息暂时没有保存成功，请稍后再试。" };
   }

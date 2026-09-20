@@ -26,23 +26,27 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
   const params = useSearchParams();
   const router = useRouter();
   const [conversations, setConversations] = useState(data.conversations);
-  const [selectedId, setSelectedId] = useState<string | null>(data.conversations[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(data.chatHistoryEnabled ? data.conversations[0]?.id ?? null : null);
   const [draftMode, setDraftMode] = useState<ChatMode>(modeFromQuery(params.get("mode")));
   const [text, setText] = useState("");
   const [notice, setNotice] = useState("");
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const [pending, startTransition] = useTransition();
-  const selected = conversations.find((conversation) => conversation.id === selectedId) ?? null;
+  const [localConversation, setLocalConversation] = useState<ConversationView | null>(null);
+  const selected = localConversation ?? conversations.find((conversation) => conversation.id === selectedId) ?? null;
+  const localOnly = !!localConversation || (!selectedId && !data.chatHistoryEnabled);
   const mode = (selected?.mode as ChatMode | undefined) ?? draftMode;
 
   useEffect(() => { setConversations(data.conversations); }, [data.conversations]);
 
   const selectMode = (nextMode: ChatMode) => {
     setDraftMode(nextMode);
+    if (localConversation) setLocalConversation({ ...localConversation, mode: nextMode });
     if (selected) setConversations((items) => items.map((item) => item.id === selected.id ? { ...item, mode: nextMode } : item));
   };
 
   const startNew = () => {
+    setLocalConversation(null);
     setSelectedId(null);
     setDraftMode(modeFromQuery(params.get("mode")));
     setText("");
@@ -50,6 +54,7 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
   };
 
   const selectConversation = (conversationId: string) => {
+    setLocalConversation(null);
     setSelectedId(conversationId);
     setNotice("");
   };
@@ -58,9 +63,11 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
     event.preventDefault();
     const content = text.trim();
     if (!content || pending) return;
+    if (selectedId && !data.chatHistoryEnabled) { setNotice("历史保存已关闭，请开始新对话。"); return; }
     const formData = new FormData();
     formData.set("content", content);
     formData.set("mode", mode);
+    formData.set("saveHistory", String(!localOnly));
     if (selectedId) formData.set("conversationId", selectedId);
     setNotice("");
     startTransition(async () => {
@@ -70,6 +77,15 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
         return;
       }
       setText("");
+      if (result.persisted === false) {
+        setSelectedId(null);
+        setLocalConversation((previous) => ({
+          id: previous?.id ?? result.conversationId!, title: previous?.title ?? result.title ?? "当前页面对话",
+          mode, status: "ACTIVE", summary: null, startedAt: "刚刚", endedAt: null,
+          messages: [...(previous?.messages ?? []), result.userMessage!, result.assistantMessage!],
+        }));
+        return;
+      }
       setSelectedId(result.conversationId);
       setConversations((items) => {
         const existing = items.find((item) => item.id === result.conversationId);
@@ -89,6 +105,10 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
   };
 
   const finish = () => {
+    if (localConversation) {
+      setLocalConversation({ ...localConversation, status: "ARCHIVED", summary: "本次对话已结束。内容仅保留在当前页面，刷新或离开后消失。" });
+      return;
+    }
     if (!selectedId || pending) return;
     const formData = new FormData();
     formData.set("conversationId", selectedId);
@@ -122,7 +142,7 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
 
   const clearHistory = () => {
     if (pending || conversations.length === 0) return;
-    const confirmation = window.prompt(`这会从历史中移除当前账号的 ${conversations.length} 段会话。\n\n请输入“清空”继续：`);
+    const confirmation = window.prompt(`这会从历史中移除当前账号的全部会话（包括未加载的历史）。\n\n请输入“清空”继续：`);
     if (confirmation !== "清空") return;
     startTransition(async () => {
       const result = await clearConversationHistory();
@@ -131,6 +151,7 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
         return;
       }
       setConversations([]);
+      setLocalConversation(null);
       setSelectedId(null);
       setText("");
       setNotice(result.message);
@@ -149,13 +170,13 @@ export function ChatFeature({ data }: { data: ChatPageData }) {
           {historyCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>}
         </button>
       </div>
-      {!historyCollapsed && <><Button className="mb-5 w-full" variant="secondary" onClick={startNew}><MessagesSquare size={16}/>开始新对话</Button>{conversations.length > 0 ? conversations.map((conversation) => <div key={conversation.id} className={cn("group mb-1 flex items-center rounded-xl", selectedId === conversation.id ? "bg-white text-[#385348] shadow-sm" : "text-[#758179] hover:bg-white/55")}><button onClick={() => selectConversation(conversation.id)} className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent px-3 py-3 text-left text-sm"><span className="block truncate">{conversation.title ?? "未命名对话"}</span><small className="mt-1 flex justify-between text-[#9aa39e]"><span>{conversation.startedAt}</span><span>{conversation.status === "ARCHIVED" ? "已结束" : "进行中"}</span></small></button><button type="button" onClick={() => removeConversation(conversation.id, conversation.title)} disabled={pending} aria-label={`删除会话：${conversation.title ?? "未命名对话"}`} title="删除会话" className="mr-2 grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-[#a09d96] opacity-0 transition hover:bg-[#f7e7e2] hover:text-[#a65f4a] focus:opacity-100 disabled:cursor-not-allowed group-hover:opacity-100"><Trash2 size={15}/></button></div>) : <p className="text-xs leading-5 text-[#89938d]">还没有历史对话。第一条消息发送后会自动创建。</p>}</>}
+      {!historyCollapsed && <><Button className="mb-5 w-full" variant="secondary" onClick={startNew}><MessagesSquare size={16}/>开始新对话</Button>{conversations.length > 0 ? conversations.map((conversation) => <div key={conversation.id} className={cn("group mb-1 flex items-center rounded-xl", selectedId === conversation.id ? "bg-white text-[#385348] shadow-sm" : "text-[#758179] hover:bg-white/55")}><button onClick={() => selectConversation(conversation.id)} className="min-w-0 flex-1 cursor-pointer border-0 bg-transparent px-3 py-3 text-left text-sm"><span className="block truncate">{conversation.title ?? "未命名对话"}</span><small className="mt-1 flex justify-between text-[#9aa39e]"><span>{conversation.startedAt}</span><span>{conversation.status === "ARCHIVED" ? "已结束" : "进行中"}</span></small></button><button type="button" onClick={() => removeConversation(conversation.id, conversation.title)} disabled={pending} aria-label={`删除会话：${conversation.title ?? "未命名对话"}`} title="删除会话" className="mr-2 grid size-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-[#a09d96] opacity-0 transition hover:bg-[#f7e7e2] hover:text-[#a65f4a] focus:opacity-100 disabled:cursor-not-allowed group-hover:opacity-100"><Trash2 size={15}/></button></div>) : <p className="text-xs leading-5 text-[#89938d]">{data.chatHistoryEnabled ? "还没有历史对话。第一条消息发送后会自动创建。" : "聊天历史保存已关闭，新对话仅在当前页面可见。"}</p>}</>}
     </aside>
 
-    <Card className="flex min-h-0 flex-col overflow-hidden"><header className="shrink-0 border-b border-[#e7e3da] px-6 py-5"><div className="flex items-center justify-between gap-4"><div><h1 className="m-0 font-serif text-xl font-medium">{selected?.title ?? "新的陪伴对话"}</h1><p className="mb-0 mt-1 text-xs text-[#89938d]">私人空间 · 消息实时保存 · AI 回复暂为 Mock</p></div><Button variant="ghost" size="sm" onClick={finish} disabled={!selectedId || selected?.status === "ARCHIVED" || pending}><CheckCircle2 size={15}/>{selected?.status === "ARCHIVED" ? "已结束" : "结束并总结"}</Button></div><div className="mt-5 flex flex-wrap gap-2">{modes.map((item) => <button key={item.id} onClick={() => selectMode(item.id)} className={cn("cursor-pointer rounded-full border px-4 py-2 text-xs font-semibold transition", mode === item.id ? "border-[#466a5b] bg-[#466a5b] text-white" : "border-[#dedbd3] bg-white text-[#6f7c75] hover:border-[#9fb0a7]")}>{item.label}</button>)}</div></header>
+    <Card className="flex min-h-0 flex-col overflow-hidden"><header className="shrink-0 border-b border-[#e7e3da] px-6 py-5"><div className="flex items-center justify-between gap-4"><div><h1 className="m-0 font-serif text-xl font-medium">{selected?.title ?? "新的陪伴对话"}</h1><p className="mb-0 mt-1 text-xs text-[#89938d]">{localOnly ? "仅当前页面 · 刷新或离开后消失 · Mock 回复" : data.chatHistoryEnabled ? "聊天历史保存已开启 · Mock 回复" : "历史保存已关闭 · 旧会话仅供查看 · Mock 回复"}</p></div><Button variant="ghost" size="sm" onClick={finish} disabled={(!selectedId && !localConversation) || selected?.status === "ARCHIVED" || pending}><CheckCircle2 size={15}/>{selected?.status === "ARCHIVED" ? "已结束" : "结束并总结"}</Button></div><div className="mt-5 flex flex-wrap gap-2">{modes.map((item) => <button key={item.id} onClick={() => selectMode(item.id)} className={cn("cursor-pointer rounded-full border px-4 py-2 text-xs font-semibold transition", mode === item.id ? "border-[#466a5b] bg-[#466a5b] text-white" : "border-[#dedbd3] bg-white text-[#6f7c75] hover:border-[#9fb0a7]")}>{item.label}</button>)}</div></header>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-scroll bg-[#f7f5f0]/70 p-7">{selected?.summary && <div className="rounded-2xl border border-[#dfe4df] bg-[#eef2ed] p-4"><div className="mb-2 text-xs font-semibold text-[#466a5b]">会话概要 · 规则生成</div><p className="m-0 text-sm leading-6 text-[#5f6f67]">{selected.summary}</p></div>}{messages.map((message) => message.role !== "SYSTEM" && <ConversationBubble role={message.role === "USER" ? "user" : "companion"} key={message.id}>{message.content}</ConversationBubble>)}
-        {hasUserMessage && <div className="ml-11 max-w-lg rounded-2xl border border-[#dfddd5] bg-white/60 p-4"><div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#466a5b]"><Bookmark size={14}/>长期记忆边界</div><p className="m-0 text-sm leading-6 text-[#65726b]">本轮消息和会话概要已经保存，但不会自动变成长期记忆。后续接入提取器后，也必须先形成候选并由你确认。</p><Button className="mt-3" size="sm" variant="ghost" asChild><Link href="/settings">查看记忆与隐私</Link></Button></div>}
+        {hasUserMessage && !localOnly && <div className="ml-11 max-w-lg rounded-2xl border border-[#dfddd5] bg-white/60 p-4"><div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#466a5b]"><Bookmark size={14}/>长期记忆边界</div><p className="m-0 text-sm leading-6 text-[#65726b]">本轮消息和会话概要已经保存，但不会自动变成长期记忆。后续接入提取器后，也必须先形成候选并由你确认。</p><Button className="mt-3" size="sm" variant="ghost" asChild><Link href="/settings">查看记忆与隐私</Link></Button></div>}
         {notice && <div className={`mx-auto max-w-lg rounded-xl px-4 py-3 text-center text-xs ${notice.includes("失败") || notice.includes("没有") ? "bg-[#f8e9e3] text-[#9a5742]" : "bg-[#e5eee9] text-[#466a5b]"}`}>{notice}</div>}
       </div>
 

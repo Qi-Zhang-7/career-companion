@@ -18,6 +18,7 @@ export async function getCurrentSettingsPageData(): Promise<SettingsPageData | n
       id: true,
       displayName: true,
       memoryEnabled: true,
+      chatHistoryEnabled: true,
       memories: {
         where: { deletedAt: null, status: { not: EntityStatus.DELETED } },
         orderBy: [{ importance: "desc" }, { updatedAt: "desc" }],
@@ -48,7 +49,7 @@ export async function getCurrentSettingsPageData(): Promise<SettingsPageData | n
   ]);
 
   return {
-    user: { displayName: user.displayName, memoryEnabled: user.memoryEnabled },
+    user: { displayName: user.displayName, memoryEnabled: user.memoryEnabled, chatHistoryEnabled: user.chatHistoryEnabled },
     memories: user.memories.map((memory) => ({
       id: memory.id,
       type: memory.type,

@@ -17,6 +17,8 @@
 
 ## 1. 阅读说明
 
+2026-09-20 新增 `User.chatHistoryEnabled`：Boolean，默认 true，控制聊天历史保存。关闭后新对话不写入会话或消息表，已有历史保留。
+
 - `String @db.Uuid`：PostgreSQL UUID。
 - `String @db.Text`：不限制为普通短字符串的长文本。
 - `DateTime`：时间戳。

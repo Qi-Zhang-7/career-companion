@@ -31,6 +31,7 @@ export async function getCurrentChatPageData(): Promise<ChatPageData | null> {
     where: { email: CURRENT_DEMO_USER_EMAIL },
     select: {
       displayName: true,
+      chatHistoryEnabled: true,
       conversations: {
         where: { deletedAt: null },
         orderBy: { startedAt: "desc" },
@@ -42,6 +43,7 @@ export async function getCurrentChatPageData(): Promise<ChatPageData | null> {
   if (!user) return null;
   return {
     userName: user.displayName,
+    chatHistoryEnabled: user.chatHistoryEnabled,
     conversations: user.conversations.map((conversation) => ({
       id: conversation.id,
       mode: conversation.mode,
@@ -55,8 +57,23 @@ export async function getCurrentChatPageData(): Promise<ChatPageData | null> {
   };
 }
 
-export async function sendCurrentUserChatMessage(input: { conversationId: string | null; mode: ChatMode; content: string }) {
-  const userId = await getCurrentUserId();
+export async function sendCurrentUserChatMessage(input: { conversationId: string | null; mode: ChatMode; content: string; saveHistory?: boolean }) {
+  return sendUserChatMessage(await getCurrentUserId(), input);
+}
+
+export async function sendUserChatMessage(userId: string, input: { conversationId: string | null; mode: ChatMode; content: string; saveHistory?: boolean }) {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  if (!user.chatHistoryEnabled || input.saveHistory === false) {
+    if (input.conversationId) throw new Error("HISTORY_DISABLED_START_NEW");
+    const now = new Date();
+    return {
+      persisted: false,
+      conversationId: `local-${crypto.randomUUID()}`,
+      title: input.content.slice(0, 28),
+      userMessage: mapMessage({ id: crypto.randomUUID(), role: MessageRole.USER, content: input.content, mode: input.mode, sequenceNo: 0, createdAt: now }),
+      assistantMessage: mapMessage({ id: crypto.randomUUID(), role: MessageRole.ASSISTANT, content: mockResponses[input.mode], mode: input.mode, sequenceNo: 0, createdAt: now }),
+    };
+  }
   return prisma.$transaction(async (tx) => {
     let conversationId = input.conversationId;
     let conversation = conversationId ? await tx.conversation.findFirst({ where: { id: conversationId, userId, deletedAt: null }, include: { messages: { orderBy: { sequenceNo: "desc" }, take: 1 } } }) : null;
@@ -75,8 +92,12 @@ export async function sendCurrentUserChatMessage(input: { conversationId: string
       tx.conversationMessage.create({ data: { conversationId: persistedConversationId, role: MessageRole.ASSISTANT, content: mockResponses[input.mode], mode: input.mode as ConversationMode, model: "mock", promptVersion: "mock-chat-v1", sequenceNo: nextSequence + 1 } }),
     ]);
     await tx.conversation.update({ where: { id: persistedConversationId }, data: { mode: input.mode as ConversationMode, status: EntityStatus.ACTIVE } });
-    return { conversationId: persistedConversationId, title: conversation.title ?? input.content.slice(0, 28), userMessage: mapMessage(userMessage), assistantMessage: mapMessage(assistantMessage) };
+    return { persisted: true, conversationId: persistedConversationId, title: conversation.title ?? input.content.slice(0, 28), userMessage: mapMessage(userMessage), assistantMessage: mapMessage(assistantMessage) };
   });
+}
+
+export async function setCurrentUserChatHistoryEnabled(enabled: boolean) {
+  await prisma.user.update({ where: { id: await getCurrentUserId() }, data: { chatHistoryEnabled: enabled } });
 }
 
 export async function finishCurrentUserConversation(conversationId: string) {

@@ -1,6 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { setCurrentUserChatHistoryEnabled } from "@/server/repositories/chat-repository";
+
+export async function toggleChatHistory(_state: { message: string }, formData: FormData) {
+  const enabled = formData.get("enabled");
+  if (enabled !== "true" && enabled !== "false") return { message: "设置无效，请重试。" };
+  try {
+    await setCurrentUserChatHistoryEnabled(enabled === "true");
+    revalidatePath("/settings");
+    revalidatePath("/chat");
+    return { message: enabled === "true" ? "已开启聊天历史保存。" : "已关闭；新对话仅保留在当前页面。" };
+  } catch {
+    return { message: "设置没有保存成功，请重试。" };
+  }
+}
 import type { MemoryFormState } from "@/features/settings/settings-types";
 import { createCurrentUserMemory, reviewCurrentUserMemory, setCurrentUserMemoryEnabled, softDeleteCurrentUserMemory } from "@/server/repositories/memory-repository";
 

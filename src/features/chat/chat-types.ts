@@ -21,6 +21,7 @@ export type ConversationView = {
 };
 
 export type ChatPageData = {
+  chatHistoryEnabled: boolean;
   userName: string;
   conversations: ConversationView[];
 };
@@ -34,4 +35,5 @@ export type ChatActionResult = {
   assistantMessage?: ChatMessageView;
   summary?: string;
   deletedCount?: number;
+  persisted?: boolean;
 };

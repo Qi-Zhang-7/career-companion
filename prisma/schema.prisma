@@ -91,6 +91,7 @@ model User {
   locale            String             @default("zh-CN")
   timezone          String             @default("Asia/Shanghai")
   memoryEnabled     Boolean            @default(true)
+  chatHistoryEnabled Boolean           @default(true)
   consentVersion    String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
