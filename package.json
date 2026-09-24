@@ -17,7 +17,8 @@
     "db:verify-memory-write": "tsx scripts/verify-memory-write.ts",
     "db:verify-chat-write": "tsx scripts/verify-chat-write.ts",
     "db:verify-chat-clear": "tsx scripts/verify-chat-clear.ts",
-    "db:verify-chat-history-setting": "tsx scripts/verify-chat-history-setting.ts"
+    "db:verify-chat-history-setting": "tsx scripts/verify-chat-history-setting.ts",
+    "db:verify-roleplay-write": "tsx scripts/verify-roleplay-write.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

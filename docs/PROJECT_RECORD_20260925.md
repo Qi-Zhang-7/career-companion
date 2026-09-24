@@ -4,6 +4,16 @@
 
 > 2026-08-30 新增下一阶段记录：`docs/NEXT_PHASE_CHAT_RETENTION_AND_PRIVACY_20260830.md`。在记忆候选自动提取之前，先补齐单次会话删除、清空历史、历史保存开关、临时对话、自动过期和数据导出。
 
+## 2026-09-25 增量：Role Play 数据闭环（第一段）
+
+- Role Play 已从静态页面升级为读取 PostgreSQL 中的真实人物、关系摘要、观察和沟通策略。
+- 用户可以选择人物、编辑真实场景与目标、设置对方风格和难度，创建 `RoleplaySession`。
+- 模拟中的用户与角色消息写入 `RoleplayMessage`；刷新后可从“最近练习”继续未完成会话。
+- 结束模拟后生成基于具体表达的规则复盘，写入 `RoleplaySession.reviewJson` 并归档会话。
+- 当前角色回复和复盘仍为规则 mock，不调用真实 AI；完整 Reflection 表关联留到下一小步。
+- 已建立根目录 `prompts/` 版本化 Prompt 骨架及 API Key 配置说明；当前尚未接入运行时。
+- 详细测试见 `docs/ROLEPLAY_DATABASE_TEST_20260925.md`，Prompt 说明见 `docs/AGENT_PROMPT_CONFIGURATION_20260925.md`。
+
 ## 2026-08-28 增量：Companion Chat 数据闭环
 
 - Chat 已从静态 mock 页面升级为 PostgreSQL 会话与消息读写。
@@ -35,6 +45,8 @@
 - 聊天正文独立滚动，左侧历史支持折叠；重复的右侧历史入口与抽屉已删除。
 - 支持单次会话删除和输入“清空”确认后的全部历史清空，均为当前用户范围内的软删除。
 - Settings 已增加 `User.chatHistoryEnabled` 开关，Chat 服务端实际执行保存策略。
+- Role Play 已接入人物、模拟会话、消息和规则复盘的数据库读写。
+- 已建立分层、版本化的 `prompts/` 配置目录，真实模型接入时由服务端 Agent 层读取。
 - PostgreSQL 表与字段已加中文注释，新增迁移同步补注释。
 - 已建立本地 Git 基线及 `codex/chat-database` 功能分支，逐步提交可回退版本。
 
@@ -42,7 +54,7 @@
 
 - 用户资料、职业档案、职场人物、Growth 展示数据和 Settings 记忆来自数据库；其中部分数据由 Seed 演示数据初始化，不代表 AI 自动生成。
 - Chat 在开启历史保存时读写真实会话与消息，助手回复仍是 mock，摘要由规则生成。
-- Home 最近关注等内容、Role Play 和 Reflection 主要仍为演示内容；尚未形成完整真实事件写入闭环。
+- Home 最近关注等内容和 Reflection 主要仍为演示内容；Role Play 已保存模拟记录，但尚未生成正式 Reflection 记录或关联真实事件。
 - 当前没有登录系统，暂时将 `demo@career-companion.local` 视为当前用户。
 
 ## 2. 技术栈与本地环境
@@ -358,7 +370,7 @@ My Career 已进一步接入 `CareerProfile`、`CareerGoal` 和 `GrowthTheme`，
 2. **仍有 mock data**：看到页面内容不代表相应表已经接入数据库。
 3. **Seed 会重置演示用户**：不要在有需要保留的数据时随意执行 Seed。
 4. **部分通用业务类型仍是 String**：例如 `sourceType`、`entityType`、人物分组等，后续稳定后可逐步收敛为枚举或受控常量。
-5. **部分页面尚无完整写入闭环**：Career、人物管理、Settings 记忆和 Chat 已可通过页面写入；Home 聚合、真实事件、Role Play、Reflection 和成长报告生成仍需继续接入。
+5. **部分页面尚无完整写入闭环**：Career、人物管理、Settings 记忆、Chat 和 Role Play 第一段已可通过页面写入；Home 聚合、真实事件、Role Play 到 Reflection 的正式关联和成长报告生成仍需继续接入。
 6. **AI 提取尚未实现**：当前 Schema 已支持候选、证据和确认状态，但还没有真正的 Extractor/Consolidator。
 7. **生产数据库未配置**：未来公开给 C 端用户使用时，需要托管 PostgreSQL、认证、备份、连接池、迁移流程和行级权限隔离。
 8. **隐私能力尚未全部完成**：一次性临时对话已完成；软删除记录仍保存在数据库，保留期限、后台物理清理和导出待实现。
@@ -378,7 +390,7 @@ My Career 已进一步接入 `CareerProfile`、`CareerGoal` 和 `GrowthTheme`，
 
 一次性临时对话允许在总开关开启时单独发起一次不保存的聊天，已复用当前页面内对话机制。关闭总开关和一次性临时对话产生的新消息均不入库，不需要对这些消息另做数据库清理；后续清理任务主要处理已有持久化及软删除数据。详细验收见 `docs/TEMPORARY_CHAT_20260925.md`。
 
-之后继续完善 Home 的真实数据聚合、Role Play / Reflection 的事件闭环及 Growth 的证据生成。真实 AI 接入按总规范保留安全、来源和确认规则；本记录不把这些待办列为已交付。
+Role Play 第一段数据库闭环已完成。下一小步是把结束模拟的结果正式写入 Reflection，并支持用户补充“真实结果、感受、改进和下一次实验”；之后再继续 Home 的真实数据聚合及 Growth 的证据生成。Chat 保留期限等隐私细节保留在后续计划中。真实 AI 接入按总规范保留安全、来源和确认规则；本记录不把这些待办列为已交付。
 
 ## 10. 维护时先看哪些文件
 
@@ -481,6 +493,8 @@ src/server/repositories/growth-repository.ts
 - [Chat 数据库测试](CHAT_DATABASE_TEST_20260828.md)
 - [历史保存开关交付与验收](CHAT_HISTORY_SETTING_20260920.md)
 - [一次性临时对话交付与验收](TEMPORARY_CHAT_20260925.md)
+- [Role Play 数据库闭环与验收](ROLEPLAY_DATABASE_TEST_20260925.md)
+- [Agent、Prompt 与 API Key 配置](AGENT_PROMPT_CONFIGURATION_20260925.md)
 - [后续会话隐私计划](NEXT_PHASE_CHAT_RETENTION_AND_PRIVACY_20260830.md)
 - [版本管理方式](VERSION_CONTROL_GUIDE.md)
 
