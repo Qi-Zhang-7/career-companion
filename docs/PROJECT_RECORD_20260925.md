@@ -1,6 +1,6 @@
-# Career Companion 项目开发记录（2026-08-27）
+# Career Companion 项目开发总记录（截至 2026-09-25）
 
-> 本文记录截至 2026-08-27 已完成的产品、前端与数据库工作，帮助后续开发快速理解“现在有什么、为什么这样设计、下一步从哪里继续”。所有实现仍以项目根目录的 `PRODUCT_ARCHITECTURE.md` 为总规范。
+> 更新日期：2026-09-25。本文依据当前源码、专题记录与本地 Git 历史整理，涵盖从 Clickable MVP Shell 到聊天历史隐私设置的开发内容。所有实现以项目根目录的 `PRODUCT_ARCHITECTURE.md` 为总规范。本次是文档汇总更新，不表示今天新增了下述全部功能。
 
 > 2026-08-30 新增下一阶段记录：`docs/NEXT_PHASE_CHAT_RETENTION_AND_PRIVACY_20260830.md`。在记忆候选自动提取之前，先补齐单次会话删除、清空历史、历史保存开关、临时对话、自动过期和数据导出。
 
@@ -10,7 +10,7 @@
 - 支持新建会话、四种陪伴模式、历史切换、刷新恢复和结束归档。
 - 结束会话会写入规则生成的 `Conversation.summary`，但不会直接创建长期记忆。
 - 助手回复暂时仍为 mock；数据库会保存 `model = mock` 和 `promptVersion = mock-chat-v1`。
-- 下一步是“记忆候选提取 + 用户确认/纠正/拒绝”，不是直接接入完整长期记忆或 RAG。
+- 后续顺序已调整为先补齐会话隐私管理，再进行记忆候选提取；见第 9 节。
 - 详细测试见 `docs/CHAT_DATABASE_TEST_20260828.md`。
 
 ## 1. 当前阶段结论
@@ -31,11 +31,18 @@
 - Workplace Map 已完成 Person、Relationship、PersonObservation、CommunicationStrategy、WorkEvent 的数据库读取，并支持人物维护和推测审核。
 - Settings 已完成 User.memoryEnabled、Memory、MemoryEvidence、MemoryLink 的数据库读取与用户可控管理。
 - Growth Report 使用快照表保存历史版本，避免模型或主题更新后覆盖过去的结论。
+- Chat 会话与消息已入库，支持四种陪伴模式、历史切换、结束会话和规则摘要。
+- 聊天正文独立滚动，左侧历史支持折叠；重复的右侧历史入口与抽屉已删除。
+- 支持单次会话删除和输入“清空”确认后的全部历史清空，均为当前用户范围内的软删除。
+- Settings 已增加 `User.chatHistoryEnabled` 开关，Chat 服务端实际执行保存策略。
+- PostgreSQL 表与字段已加中文注释，新增迁移同步补注释。
+- 已建立本地 Git 基线及 `codex/chat-database` 功能分支，逐步提交可回退版本。
 
 当前仍是混合状态：
 
-- 用户姓名和 Growth 数据已经来自数据库。
-- Home 最近关注、Chat、Role Play、Reflection 的大部分内容仍是 mock data。
+- 用户资料、职业档案、职场人物、Growth 展示数据和 Settings 记忆来自数据库；其中部分数据由 Seed 演示数据初始化，不代表 AI 自动生成。
+- Chat 在开启历史保存时读写真实会话与消息，助手回复仍是 mock，摘要由规则生成。
+- Home 最近关注等内容、Role Play 和 Reflection 主要仍为演示内容；尚未形成完整真实事件写入闭环。
 - 当前没有登录系统，暂时将 `demo@career-companion.local` 视为当前用户。
 
 ## 2. 技术栈与本地环境
@@ -62,6 +69,11 @@ npm run db:migrate
 npm run db:seed
 npm run db:verify
 npm run db:studio
+npm run db:verify-comments
+npm run db:verify-memory-write
+npm run db:verify-chat-write
+npm run db:verify-chat-clear
+npx tsx scripts/verify-chat-history-setting.ts
 ```
 
 注意：数据库密码只保存在 `.env`，文档、代码和 Git 中都不要记录真实密码。
@@ -129,7 +141,7 @@ flowchart LR
 
 | 表 | 用途 | 关键字段 |
 |---|---|---|
-| `User` | 用户主表、隐私设置和所有个人数据的归属根节点 | `email`、`displayName`、`locale`、`timezone`、`memoryEnabled` |
+| `User` | 用户主表、隐私设置和所有个人数据的归属根节点 | `email`、`displayName`、`locale`、`timezone`、`memoryEnabled`、`chatHistoryEnabled` |
 | `CareerProfile` | 相对稳定的职业背景；与 User 一对一 | `currentRole`、`industry`、`companyType`、`city`、`yearsExperience`、`careerStage` |
 | `CareerGoal` | 短期、中期、长期职业目标；与 User 一对多 | `horizon`、`title`、`status`、`targetDate`、`confidence` |
 
@@ -160,7 +172,11 @@ flowchart LR
 | `Conversation` | 一次陪伴对话的会话信息、模式、状态和摘要 |
 | `ConversationMessage` | 按顺序保存用户和助手消息，并预留模型、Prompt 版本、Token 和安全级别信息 |
 
-目前页面仍使用 mock 对话，没有向这两张表写入真实数据。
+历史保存开启时，两张表已接入真实读写。`Conversation.summary` 保存规则生成的摘要，`ConversationMessage` 保存消息角色、正文、模式、顺序和时间；mock 助手回复记录 `model = mock`、`promptVersion = mock-chat-v1`。历史列表当前读取最近 20 条会话，尚未提供分页入口。
+
+删除单次会话或清空历史会设置 `Conversation.deletedAt` 与 `status = DELETED`，查询排除这些会话。消息仍在数据库中；自动物理清理尚未实现，也没有前端恢复入口。
+
+`User.chatHistoryEnabled` 默认 true。关闭后新对话不写入会话、消息或长期记忆表，只保留在当前页面 React 状态中；刷新、离开、切换历史或开始新对话后丢失。已有历史仍保留，关闭期间禁止追加消息，重新开启后可继续。服务端每次发送检查设置，当前页面内对话不会因重新开启开关而自动入库。
 
 ### 4.4 事件、行动、模拟与复盘
 
@@ -186,7 +202,9 @@ flowchart LR
 | `UserInsight` / `InsightEvidence` | 基于多项证据形成的洞察及证据 |
 | `UserPattern` | 触发 → 反应 → 结果的重复模式候选 |
 
-目前这些表主要完成了结构预留，Settings 页面还没有读取真实 Memory 数据，AI 也还没有执行自动提取。
+Settings 已读取真实 `Memory`、`MemoryEvidence` 和 `MemoryLink`，支持手动添加、确认、纠正、拒绝及软删除。手动添加的记忆标记为用户确认。证据与关联区域显示数据库已有内容；手动记忆没有聊天证据时会明确说明。
+
+`User.memoryEnabled` 控制长期记忆设置，与聊天历史开关是两个独立字段。自动提取器尚未接入，所以开启长期记忆后聊天不会自动新增 Memory。`UserInsight`、`UserPattern` 和模型自动更新目前主要是结构预留；聊天摘要也不等于长期记忆。
 
 ### 4.6 三个长期模型
 
@@ -261,7 +279,7 @@ flowchart LR
 src/server/repositories/current-user-repository.ts
 ```
 
-现在 Home、My Career、Growth、Settings 都通过该入口识别同一个演示用户。当前逻辑是按以下邮箱查找：
+各页面通过统一的演示邮箱常量识别同一个用户；Home 使用身份查询函数，其他功能 repository 按需读取同一用户及业务数据。当前逻辑是按以下邮箱查找：
 
 ```text
 demo@career-companion.local
@@ -321,33 +339,52 @@ My Career 已进一步接入 `CareerProfile`、`CareerGoal` 和 `GrowthTheme`，
 
 修复后已验证开发页面在执行生产构建后仍保持完整样式。
 
+### 7.4 Chat 交互与隐私设置
+
+- 通过固定可用高度、Flex 的 `min-height: 0` 与消息区滚动，避免长对话无限撑高页面。
+- 最终保留左侧可折叠的历史列表，删除重复右侧抽屉；折叠后给聊天内容更多宽度。
+- 单次删除先确认，成功后移除历史项；清空历史要求输入“清空”，服务端处理当前用户全部未删除会话。
+- 历史开关单独拆为 `src/features/settings/chat-history-setting.tsx`，提供保存中与失败反馈。
+- 关闭历史后的本地对话结束时仅提示结束，不伪造已保存摘要。
+
+### 7.5 记忆抽屉与关系图
+
+- 已处理记忆抽屉交互问题；当前纠正内容成功后保持详情抽屉打开，用户手动关闭。新增记忆与纠正操作的行为应分别测试，不能将打开纠正表单触发为自动关闭。
+- 人物维护已支持数据库写入与列表更新；关系图按关联事件数优先排序，坐标仍为预设布局，不能解释为关系远近。后续优化保留在第 11 节。
+
 ## 8. 当前已知边界和风险
 
 1. **暂无登录鉴权**：当前邮箱常量只适合单用户本地 MVP，不能直接用于 C 端生产环境。
 2. **仍有 mock data**：看到页面内容不代表相应表已经接入数据库。
 3. **Seed 会重置演示用户**：不要在有需要保留的数据时随意执行 Seed。
 4. **部分通用业务类型仍是 String**：例如 `sourceType`、`entityType`、人物分组等，后续稳定后可逐步收敛为枚举或受控常量。
-5. **尚未提供页面写入闭环**：目前主要通过 DBeaver 改数据，下一步需要实现表单、Server Action、校验和错误反馈。
+5. **部分页面尚无完整写入闭环**：Career、人物管理、Settings 记忆和 Chat 已可通过页面写入；Home 聚合、真实事件、Role Play、Reflection 和成长报告生成仍需继续接入。
 6. **AI 提取尚未实现**：当前 Schema 已支持候选、证据和确认状态，但还没有真正的 Extractor/Consolidator。
 7. **生产数据库未配置**：未来公开给 C 端用户使用时，需要托管 PostgreSQL、认证、备份、连接池、迁移流程和行级权限隔离。
+8. **隐私能力尚未全部完成**：软删除记录仍保存在数据库，保留期限、后台物理清理和导出待实现。独立的一次性临时对话入口尚未提供。
+9. **模型能力仍为 mock**：还没有真实模型调用、Agent 编排执行、自动记忆提取和成长洞察生成，不能把页面演示当作这些能力已上线。
 
 ## 9. 下一步建议（按小步迭代）
 
-职业档案数据库闭环已完成。下一轮建议继续按以下顺序推进：
+按当前隐私计划，小步顺序如下：
 
 ```text
-Companion Chat 会话与消息落库
-  → 记忆候选提取与用户确认闭环
-  → Home 聚合真实事件、主题和行动项
-  → Chat 对话落库
-  → AI 候选提取 + 用户确认
+已完成：Chat 落库 → 单次删除 → 清空历史 → 保存历史开关
+下一步：一次性临时对话入口
+  → 保留期限、自动过期与后台物理清理
+  → 数据导出
+  → 记忆候选提取与用户确认
 ```
+
+一次性临时对话允许在总开关开启时单独发起一次不保存的聊天，可复用当前页面内对话机制。现在关闭总开关后的新消息不入库，不需要对这些消息另做数据库清理；后续清理任务主要处理已有持久化及软删除数据。
+
+之后继续完善 Home 的真实数据聚合、Role Play / Reflection 的事件闭环及 Growth 的证据生成。真实 AI 接入按总规范保留安全、来源和确认规则；本记录不把这些待办列为已交付。
 
 ## 10. 维护时先看哪些文件
 
 ```text
 PRODUCT_ARCHITECTURE.md
-docs/PROJECT_RECORD_20260827.md
+docs/PROJECT_RECORD_20260925.md
 docs/GROWTH_PRODUCT_DECISIONS.md
 docs/DATABASE_SETUP.md
 prisma/schema.prisma
@@ -399,3 +436,51 @@ src/server/repositories/growth-repository.ts
 | 待确认观察数量 | 人物节点上的轻量提示 |
 
 这项优化当前不阻塞 MVP 数据闭环，不在 Settings、Chat 和记忆流程完成前提前实施。
+
+## 12. 本地版本与交付记录
+
+截至本次整理前，最新功能提交是 `ddf0cbd`，当前功能分支为 `codex/chat-database`。以下提交记录功能演进；各项实际完成时间以 Git 历史和专题记录为准，不统一改写为今天。
+
+| 提交 | 开发内容 |
+|---|---|
+| `e26ccc3` | 数据库驱动 MVP 基线：职业档案、人物、成长、记忆管理等已有功能 |
+| `e150916` | Companion Chat 会话、消息入库及摘要 |
+| `3952c81` | 聊天独立滚动及当时的历史面板 |
+| `549fff3` | 删除重复历史面板，改为左侧折叠历史栏 |
+| `4aaeeb9` | 会话保留与隐私控制计划 |
+| `bf66c0e` | 单次会话软删除及数据库迁移 |
+| `f1c6089` | 当前用户全部历史清空及隔离测试 |
+| `ddf0cbd` | 聊天历史保存开关及数据库迁移 |
+
+这些是本地代码版本；数据库正文不包含在 Git 提交中。数据库备份需要独立管理，回退代码也不等于回退数据。
+
+新增数据库迁移包括表/字段中文注释、`Conversation.deletedAt` 及索引、删除字段注释、`User.chatHistoryEnabled` 及注释。Schema 仍为 31 个 Model；上一轮注释校验结果为 31/31 张表、328/328 个字段。
+
+## 13. 验证记录与文档索引
+
+以下为此前功能交付时的验证记录，2026-09-25 本次仅核对源码、提交和文档，没有重新执行数据库写入测试或宣称完成用户前端验收。
+
+| 验证 | 已记录结果与范围 |
+|---|---|
+| ESLint / Next.js build | 上一轮历史开关交付时通过 |
+| Chat 写入测试 | 临时会话写入、归档、摘要及软删除可见性验证通过，临时数据清理 |
+| 清空测试 | 独立临时用户的两段会话批量软删除通过，测试用户及关联数据清理 |
+| 历史开关测试 | 关闭不入库、旧客户端防护、原记录保留、重新开启和本地对话不补存验证通过 |
+| 数据库注释 | 上一轮 31/31 表、328/328 字段，无缺失 |
+| 页面 HTTP | 上一轮 Settings、Chat 返回 200；不代表服务今天仍在运行 |
+
+专题文档：
+
+- [产品总规范](../PRODUCT_ARCHITECTURE.md)
+- [数据库数据字典](DATABASE_DICTIONARY_20260827.md)
+- [数据库配置](DATABASE_SETUP.md)
+- [Growth 产品决策](GROWTH_PRODUCT_DECISIONS.md)
+- [职业档案测试资料](MY_CAREER_TEST_PROFILE_20260827.md)
+- [职场关系测试](WORKPLACE_MAP_TEST_20260827.md)
+- [记忆管理测试](SETTINGS_MEMORY_TEST_20260828.md)
+- [Chat 数据库测试](CHAT_DATABASE_TEST_20260828.md)
+- [历史保存开关交付与验收](CHAT_HISTORY_SETTING_20260920.md)
+- [后续会话隐私计划](NEXT_PHASE_CHAT_RETENTION_AND_PRIVACY_20260830.md)
+- [版本管理方式](VERSION_CONTROL_GUIDE.md)
+
+以上专题文档保留其原有日期。本总记录集中反映截至 2026-09-25 的状态，避免把已完成任务继续列为下一步。

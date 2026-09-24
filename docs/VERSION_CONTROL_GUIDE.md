@@ -428,7 +428,7 @@ git merge --no-ff codex/chat-database
 
 ```text
 PRODUCT_ARCHITECTURE.md
-docs/PROJECT_RECORD_20260827.md
+docs/PROJECT_RECORD_20260925.md
 docs/DATABASE_DICTIONARY_20260827.md
 对应功能测试说明
 ```
