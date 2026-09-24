@@ -17,9 +17,10 @@ async function main() {
     assert.equal(await prisma.conversationMessage.count({ where: { conversationId: saved.conversationId } }), 3);
     await prisma.user.update({ where: { id: user.id }, data: { chatHistoryEnabled: true } });
     assert.equal((await sendUserChatMessage(user.id, { ...input, saveHistory: false })).persisted, false, "页面内对话不能因重新开启而偷偷入库");
+    assert.equal(await prisma.memory.count({ where: { userId: user.id } }), 0, "临时对话不能生成长期记忆");
     assert.equal((await sendUserChatMessage(user.id, input)).persisted, true);
     assert.equal(await prisma.conversation.count({ where: { userId: user.id } }), 2);
-    console.log("PASS: 保存开关、旧历史保留、过期客户端防护、页面内对话不入库、重新开启。");
+    console.log("PASS: 保存开关、一次性临时对话、旧历史保留、过期客户端防护、页面内对话不入库、重新开启。");
   } finally {
     await prisma.user.delete({ where: { id: user.id } });
   }
