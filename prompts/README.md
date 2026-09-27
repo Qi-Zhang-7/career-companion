@@ -11,7 +11,7 @@
 1. `base/personality.v1.md`：统一人格与表达原则。
 2. `base/safety.v1.md`：安全边界和高风险响应。
 3. `base/privacy.v1.md`：隐私、来源、事实与推测边界。
-4. 当前 Companion 能力或 Domain Agent，例如 `agents/roleplay.v1.md`。
+4. 当前 Companion 能力或 Domain Agent，例如 `agents/roleplay.v1.md` 或 `agents/reflection.v1.md`。
 5. 服务端生成的最小相关上下文、用户当前任务和结构化输出约束。
 
 每次改动通过新版本文件发布，例如从 `roleplay.v1.md` 升级到 `roleplay.v2.md`；历史运行继续保留原 `prompt_version`，不能静默覆盖。

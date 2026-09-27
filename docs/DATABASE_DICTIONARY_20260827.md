@@ -401,9 +401,11 @@
 | `id` | UUID，主键 | 复盘 ID |
 | `userId` | UUID，外键 | 所属用户 |
 | `workEventId` | UUID，可空，外键 | 关联事件；事件删除后设为空并保留复盘 |
+| `roleplaySessionId` | UUID，可空，唯一外键 | 关联模拟；一次模拟最多对应一份正式复盘 |
 | `goalSelf` | Text，可空 | 用户自己的目标 |
 | `goalOther` | Text，可空 | 对方可能的目标 |
 | `whatHappened` | Text | 实际发生了什么 |
+| `userFeeling` | Text，可空 | 用户确认的感受、担心或最困难之处，不作为客观事实 |
 | `workedWell` | Text，可空 | 具体做得好的地方 |
 | `improvements` | Text，可空 | 可以改进的具体地方 |
 | `nextExperiment` | Text，可空 | 下次准备尝试的一个动作 |
@@ -411,6 +413,7 @@
 | `updatedAt` | DateTime | 最近更新时间 |
 | `user` | Prisma 关系 | 所属 User |
 | `workEvent` | Prisma 关系，可空 | 对应 WorkEvent |
+| `roleplaySession` | Prisma 关系，可空 | 对应 RoleplaySession |
 
 ## 8. Role Play：模拟沟通
 
@@ -433,6 +436,7 @@
 | `user` | Prisma 关系 | 所属 User |
 | `person` | Prisma 关系，可空 | 对应 Person |
 | `messages` | Prisma 关系 | 模拟消息 |
+| `reflection` | Prisma 一对一关系，可空 | 该模拟对应的正式复盘 |
 
 ### 8.2 `RoleplayMessage`：模拟消息
 

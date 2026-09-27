@@ -1,8 +1,17 @@
-# Career Companion 项目开发总记录（截至 2026-09-25）
+# Career Companion 项目开发总记录（截至 2026-09-27）
 
-> 更新日期：2026-09-25。本文依据当前源码、专题记录与本地 Git 历史整理，涵盖从 Clickable MVP Shell 到聊天历史隐私设置的开发内容。所有实现以项目根目录的 `PRODUCT_ARCHITECTURE.md` 为总规范。本次是文档汇总更新，不表示今天新增了下述全部功能。
+> 更新日期：2026-09-27。本文依据当前源码、专题记录与本地 Git 历史整理，涵盖从 Clickable MVP Shell 到 Role Play → Reflection 数据闭环的开发内容。所有实现以项目根目录的 `PRODUCT_ARCHITECTURE.md` 为总规范。本次是文档汇总更新，不表示今天新增了下述全部功能。
 
 > 2026-08-30 新增下一阶段记录：`docs/NEXT_PHASE_CHAT_RETENTION_AND_PRIVACY_20260830.md`。在记忆候选自动提取之前，先补齐单次会话删除、清空历史、历史保存开关、临时对话、自动过期和数据导出。
+
+## 2026-09-27 增量：Role Play → Reflection 正式关联
+
+- Reflection 页面已读取指定 Role Play 的人物、场景、目标、完整模拟原话和规则初步复盘。
+- 用户可确认或修改模拟经过、自己的目标、对方可能关注点、用户感受、有效表达、改进点和一个下一次实验。
+- `Reflection.roleplaySessionId` 建立一对一唯一外键；同一次模拟再次保存会更新原复盘，不重复新增。
+- 新增 `Reflection.userFeeling`，将用户感受与客观事实、对方推测分开保存。
+- 模拟复盘明确不自动作为现实成长证据，也不自动进入长期记忆。
+- 详细验证见 `docs/REFLECTION_DATABASE_TEST_20260927.md`。
 
 ## 2026-09-25 增量：Role Play 数据闭环（第一段）
 
@@ -10,7 +19,7 @@
 - 用户可以选择人物、编辑真实场景与目标、设置对方风格和难度，创建 `RoleplaySession`。
 - 模拟中的用户与角色消息写入 `RoleplayMessage`；刷新后可从“最近练习”继续未完成会话。
 - 结束模拟后生成基于具体表达的规则复盘，写入 `RoleplaySession.reviewJson` 并归档会话。
-- 当前角色回复和复盘仍为规则 mock，不调用真实 AI；完整 Reflection 表关联留到下一小步。
+- 当前角色回复和初步复盘仍为规则 mock，不调用真实 AI；正式 Reflection 关联已在 2026-09-27 完成。
 - 已建立根目录 `prompts/` 版本化 Prompt 骨架及 API Key 配置说明；当前尚未接入运行时。
 - 详细测试见 `docs/ROLEPLAY_DATABASE_TEST_20260925.md`，Prompt 说明见 `docs/AGENT_PROMPT_CONFIGURATION_20260925.md`。
 
@@ -46,6 +55,7 @@
 - 支持单次会话删除和输入“清空”确认后的全部历史清空，均为当前用户范围内的软删除。
 - Settings 已增加 `User.chatHistoryEnabled` 开关，Chat 服务端实际执行保存策略。
 - Role Play 已接入人物、模拟会话、消息和规则复盘的数据库读写。
+- Role Play 结束后可进入数据库驱动的 Reflection，保存并再次编辑同一份正式复盘。
 - 已建立分层、版本化的 `prompts/` 配置目录，真实模型接入时由服务端 Agent 层读取。
 - PostgreSQL 表与字段已加中文注释，新增迁移同步补注释。
 - 已建立本地 Git 基线及 `codex/chat-database` 功能分支，逐步提交可回退版本。
@@ -54,7 +64,7 @@
 
 - 用户资料、职业档案、职场人物、Growth 展示数据和 Settings 记忆来自数据库；其中部分数据由 Seed 演示数据初始化，不代表 AI 自动生成。
 - Chat 在开启历史保存时读写真实会话与消息，助手回复仍是 mock，摘要由规则生成。
-- Home 最近关注等内容和 Reflection 主要仍为演示内容；Role Play 已保存模拟记录，但尚未生成正式 Reflection 记录或关联真实事件。
+- Home 最近关注等内容仍主要为演示内容；Role Play 已能生成正式 Reflection，但模拟结果尚未关联现实 WorkEvent，也不会直接成为 Growth 证据。
 - 当前没有登录系统，暂时将 `demo@career-companion.local` 视为当前用户。
 
 ## 2. 技术栈与本地环境
@@ -370,7 +380,7 @@ My Career 已进一步接入 `CareerProfile`、`CareerGoal` 和 `GrowthTheme`，
 2. **仍有 mock data**：看到页面内容不代表相应表已经接入数据库。
 3. **Seed 会重置演示用户**：不要在有需要保留的数据时随意执行 Seed。
 4. **部分通用业务类型仍是 String**：例如 `sourceType`、`entityType`、人物分组等，后续稳定后可逐步收敛为枚举或受控常量。
-5. **部分页面尚无完整写入闭环**：Career、人物管理、Settings 记忆、Chat 和 Role Play 第一段已可通过页面写入；Home 聚合、真实事件、Role Play 到 Reflection 的正式关联和成长报告生成仍需继续接入。
+5. **部分页面尚无完整写入闭环**：Career、人物管理、Settings 记忆、Chat、Role Play 和模拟后的 Reflection 已可通过页面写入；Home 聚合、真实事件回访、Reflection 到 Growth 证据和成长报告生成仍需继续接入。
 6. **AI 提取尚未实现**：当前 Schema 已支持候选、证据和确认状态，但还没有真正的 Extractor/Consolidator。
 7. **生产数据库未配置**：未来公开给 C 端用户使用时，需要托管 PostgreSQL、认证、备份、连接池、迁移流程和行级权限隔离。
 8. **隐私能力尚未全部完成**：一次性临时对话已完成；软删除记录仍保存在数据库，保留期限、后台物理清理和导出待实现。
@@ -390,7 +400,7 @@ My Career 已进一步接入 `CareerProfile`、`CareerGoal` 和 `GrowthTheme`，
 
 一次性临时对话允许在总开关开启时单独发起一次不保存的聊天，已复用当前页面内对话机制。关闭总开关和一次性临时对话产生的新消息均不入库，不需要对这些消息另做数据库清理；后续清理任务主要处理已有持久化及软删除数据。详细验收见 `docs/TEMPORARY_CHAT_20260925.md`。
 
-Role Play 第一段数据库闭环已完成。下一小步是把结束模拟的结果正式写入 Reflection，并支持用户补充“真实结果、感受、改进和下一次实验”；之后再继续 Home 的真实数据聚合及 Growth 的证据生成。Chat 保留期限等隐私细节保留在后续计划中。真实 AI 接入按总规范保留安全、来源和确认规则；本记录不把这些待办列为已交付。
+Role Play → Reflection 正式关联已完成。下一小步是增加“现实中尝试后回来记录结果”的回访入口，把已发生的 WorkEvent、实际结果和 Reflection 连接起来；只有这类真实结果才能成为 Growth Evidence。Chat 保留期限等隐私细节继续保留在后续计划中。真实 AI 接入按总规范保留安全、来源和确认规则；本记录不把这些待办列为已交付。
 
 ## 10. 维护时先看哪些文件
 
@@ -470,7 +480,7 @@ src/server/repositories/growth-repository.ts
 
 ## 13. 验证记录与文档索引
 
-以下为此前功能交付时的验证记录，2026-09-25 本次仅核对源码、提交和文档，没有重新执行数据库写入测试或宣称完成用户前端验收。
+以下为此前功能交付及 2026-09-27 Role Play → Reflection 闭环的验证记录；自动验证不等同于用户前端验收。
 
 | 验证 | 已记录结果与范围 |
 |---|---|
@@ -480,6 +490,7 @@ src/server/repositories/growth-repository.ts
 | 历史开关测试 | 关闭不入库、旧客户端防护、原记录保留、重新开启和本地对话不补存验证通过 |
 | 数据库注释 | 上一轮 31/31 表、328/328 字段，无缺失 |
 | 页面 HTTP | 上一轮 Settings、Chat 返回 200；不代表服务今天仍在运行 |
+| Reflection 写入测试 | 临时模拟首次保存、再次编辑、唯一关联及测试数据清理通过 |
 
 专题文档：
 
@@ -494,8 +505,9 @@ src/server/repositories/growth-repository.ts
 - [历史保存开关交付与验收](CHAT_HISTORY_SETTING_20260920.md)
 - [一次性临时对话交付与验收](TEMPORARY_CHAT_20260925.md)
 - [Role Play 数据库闭环与验收](ROLEPLAY_DATABASE_TEST_20260925.md)
+- [Role Play → Reflection 数据库闭环与验收](REFLECTION_DATABASE_TEST_20260927.md)
 - [Agent、Prompt 与 API Key 配置](AGENT_PROMPT_CONFIGURATION_20260925.md)
 - [后续会话隐私计划](NEXT_PHASE_CHAT_RETENTION_AND_PRIVACY_20260830.md)
 - [版本管理方式](VERSION_CONTROL_GUIDE.md)
 
-以上专题文档保留其原有日期。本总记录集中反映截至 2026-09-25 的状态，避免把已完成任务继续列为下一步。
+以上专题文档保留其原有日期。本总记录集中反映截至 2026-09-27 的状态，避免把已完成任务继续列为下一步。

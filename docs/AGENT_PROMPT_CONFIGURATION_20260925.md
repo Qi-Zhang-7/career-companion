@@ -1,6 +1,6 @@
 # Agent、Prompt 与 API Key 配置说明
 
-更新时间：2026-09-25
+更新时间：2026-09-27
 
 ## 1. API Key 放在哪里
 
@@ -24,6 +24,7 @@ prompts/
     privacy.v1.md
   agents/
     roleplay.v1.md
+    reflection.v1.md
 ```
 
 后续逐步补充 `companion/`、`memory/`、`insight/` 和其余领域能力。Prompt 不散落在页面组件或 server action 中。
