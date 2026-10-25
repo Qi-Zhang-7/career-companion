@@ -7,4 +7,5 @@ out/
 !.env.example
 .DS_Store
 *.tsbuildinfo
+*.zip
 src/generated/prisma/
